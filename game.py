@@ -24,8 +24,6 @@ PLAYER_CONTROLS = [ # up, down, left, right
 ]
 PLAYER_COLORS = [(0, 255, 0), (255, 255, 0)]
 
-score = 0
-
 FOOD_COLORS = [
     ["normal", (255, 0, 0)],
     ["speed", (0, 0, 255)]
@@ -61,13 +59,13 @@ class Board:
         self.current_fps = FPS
         self.width = width
         self.height = height
-        self.num_of_players = num_of_players
-        self.move = []
         for player in range(num_of_players):
             self.players.append({
                 "player": player,
                 "controls": player_controls[player],
-                "can_move": True
+                "can_move": True,
+                "move": None,
+                "score": 0
             })
 
     def loop(self):
@@ -92,16 +90,10 @@ class Board:
             pygame.display.update()
             if self.is_game_over():
                 print('game over')
-                #snake = Snake()
-                self.start_screen()
-                self.score = 0
-                self.current_FPS = FPS
-                self.late_food_gen = False
-                self.timers = []
-                self.foods = [get_new_food_location(snake)]
                 alive = False
             pygame.time.Clock().tick(self.current_fps)
-            self.can_move = True
+            for p in self.players:
+                p['can_move'] = True
 
     def is_game_over(self):
         over = []
@@ -126,7 +118,7 @@ class Board:
             txt_rect = txt.get_rect(center = (WIDTH / 2, HEIGHT / 2 - 40))
         
         self.snakes = []
-        positions = generate_positions(self.width/SNAKE_SIZE, self.height/SNAKE_SIZE, self.num_of_players)
+        positions = generate_positions(self.width/SNAKE_SIZE, self.height/SNAKE_SIZE, len(self.players))
         print(positions)
         for player in range(len(self.players)):
             self.snakes.append(Snake([int(positions[player][0])*SNAKE_SIZE, int(positions[player][1])*SNAKE_SIZE]))
@@ -136,8 +128,6 @@ class Board:
             screen.blit(text, text_rect)
             if self.score: screen.blit(txt, txt_rect)
             pygame.display.flip()
-        
-
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -166,45 +156,63 @@ class Board:
                             self.snakes[pi].position.append([self.snakes[pi].position[0][0]+offset[0], self.snakes[pi].position[0][1]+offset[1]])
                             self.snakes[pi].speed = offset
                         waiting = False
-        self.get_new_food_location(self.snakes[0])
+        # bofore gal=me start
+        self.foods = [self.get_new_food_location()]
+        self.score = 0
+        self.late_food_gen = False
+        self.timers = []
+        # start
         self.loop()
+        # on game over
+        self.current_FPS = FPS
+        self.foods = []
         self.start_screen()
 
-    def get_new_food_location(self, snake):
-        if len(snake.position) + len(self.foods) >= WIDTH/20 * HEIGHT/20 / 2:
+    def get_new_food_location(self):
+        location = []; occupied_squares = [];
+        for snake in self.snakes:
+            for position in snake.position:
+                occupied_squares.append(position)
+
+        if len(occupied_squares) + len(self.foods) >= WIDTH/20 * HEIGHT/20 / 2:
             self.late_food_gen = True
-        location = []
+        
         if not self.late_food_gen:
             location = [random.randrange(0, WIDTH, SNAKE_SIZE), random.randrange(0, HEIGHT, SNAKE_SIZE)]
+            print(location)
             bad = False
-            for snake in self.snakes:
-                for position in snake.position:
-                    if position == location:
-                        print("food can't be at", position)
-                        bad = True
-                        break
-                for position in self.foods:
-                    if position == location:
-                        print("food can't be at", position)
-                        bad = True
-                        break
+            if location in occupied_squares: bad == True; print("food can't be at", location)
+            # for position in snake.position:
+            #     if position == location:
+            #         print("food can't be at", location)
+            #         bad = True
+            #         break
+            if location in self.foods: bad == True; print("food can't be at", location)
+            # for position in self.foods:
+            #     if position == location:
+            #         print("food can't be at", location)
+            #         bad = True
+            #         break
 
             if bad:
-                location = get_new_food_location(snake)
+                location = self.get_new_food_location()
         else: 
-            self.foods.sort(); open_squares = []
+            self.foods.sort(); open_squares = []; 
+
             for x in range(0, WIDTH, 20): 
                 for y in range(0, HEIGHT, 20):
                     good = True
-                    for pos in snake.position:
-                        if pos[0] == x or pos[1] != y:
-                            good = False
-                    for food in self.foods:
-                        if food[0] == x or food[1] != y:
-                            good = False
-                    if good:
-                        print("good", [x, y])
+                    if not [x, y] in occupied_squares:
                         open_squares.append([x, y])
+                    # for pos in snake.position:
+                    #     if pos[0] == x or pos[1] != y:
+                    #         good = False
+                    # for food in self.foods:
+                    #     if food[0] == x or food[1] != y:
+                    #         good = False
+                    # if good:
+                    #     print("good", [x, y])
+                    #     open_squares.append([x, y])
             # print("open_squares", open_squares)
             rand_num = random.randint(0, len(open_squares) - 1)
             location = open_squares[rand_num]
@@ -213,6 +221,7 @@ class Board:
         if random.randint(0, 100) <= 50:
             modifiers.append("speed")
         location.append(modifiers)
+        print(location)
         return location
 
     def update_foods(self):
@@ -227,15 +236,15 @@ class Board:
                         self.current_FPS = FPS*2 # speed: 2x multiplier
                         self.set_timer('speed', 10) # 10 seconds
 
-                    self.foods.append(self.get_new_food_location(snake))
-                    # foods.append(get_new_food_location(snake))
+                    self.foods.append(self.get_new_food_location())
+                    # foods.append(self.get_new_food_location())
                     snake.position.append(snake.last_position)
 
     def draw_foods(self):
         for food in self.foods:
             color = FOOD_COLOR
             if "speed" in food[2]:
-                color = get_food_color("speed")
+                color = self.get_food_color("speed")
             pygame.draw.rect(screen, color, pygame.Rect(food[0]+BOARD_POSITION[0], food[1]+BOARD_POSITION[1], SNAKE_SIZE, SNAKE_SIZE))
 
     def get_food_color(self, mod):
@@ -246,7 +255,7 @@ class Board:
 
     def update_timers(self):
         for timer in self.timers: 
-            if "speed" in timer and timer[1] + timer[2] <= time.time(): 
+            if "speed" in timer[0] and timer[1] + timer[2] <= time.time(): 
                 self.timers.remove(timer); self.current_FPS = FPS # end speed
         else:
             self.current_FPS = FPS*2
@@ -254,17 +263,19 @@ class Board:
     
     def process_events(self):
         # possible cached move from last tick
-        if self.move:
-            for pi in range(len(self.players)):
-                if event.key == self.players[pi]['controls'][0]:
-                    self.snakes[pi].speed = [0, -SNAKE_SIZE]; self.can_move = False
-                elif event.key == self.players[pi]['controls'][1]:
-                    self.snakes[pi].speed = [0, SNAKE_SIZE]; self.can_move = False
-                elif event.key == self.players[pi]['controls'][2]:
-                    self.snakes[pi].speed = [-SNAKE_SIZE, 0]; self.can_move = False
-                elif event.key == self.players[pi]['controls'][3]:
-                    self.snakes[pi].speed = [SNAKE_SIZE, 0]; self.can_move = False
-                self.move = None
+        for pi in range(len(self.players)):
+            move = self.players[pi]['move']
+            if move:
+                if   move.key == self.players[pi]['controls'][0]:
+                    self.snakes[pi].speed = [0, -SNAKE_SIZE]; # up
+                elif move.key == self.players[pi]['controls'][1]:
+                    self.snakes[pi].speed = [0, SNAKE_SIZE];  # down
+                elif move.key == self.players[pi]['controls'][2]:
+                    self.snakes[pi].speed = [-SNAKE_SIZE, 0]; # left
+                elif move.key == self.players[pi]['controls'][3]:
+                    self.snakes[pi].speed = [SNAKE_SIZE, 0];  # right
+                self.players[pi]['can_move'] = True
+                self.players[pi]['move'] = None
         
         # other events
         for event in pygame.event.get():
@@ -273,14 +284,17 @@ class Board:
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 for pi in range(len(self.players)):
-                    if event.key == self.players[pi]['controls'][0]:
-                        self.snakes[pi].speed = [0, -SNAKE_SIZE]
-                    elif event.key == self.players[pi]['controls'][1]:
-                        self.snakes[pi].speed = [0, SNAKE_SIZE]
-                    elif event.key == self.players[pi]['controls'][2]:
-                        self.snakes[pi].speed = [-SNAKE_SIZE, 0]
-                    elif event.key == self.players[pi]['controls'][3]:
-                        self.snakes[pi].speed = [SNAKE_SIZE, 0]
+                    if self.players[pi]['can_move']: 
+                        if   event.key == self.players[pi]['controls'][0] and self.snakes[pi].speed != [0, SNAKE_SIZE]:
+                            self.snakes[pi].speed = [0, -SNAKE_SIZE]; self.players[pi]['can_move'] = False # up
+                        elif event.key == self.players[pi]['controls'][1] and self.snakes[pi].speed != [0, -SNAKE_SIZE]:
+                            self.snakes[pi].speed = [0, SNAKE_SIZE];  self.players[pi]['can_move'] = False # down
+                        elif event.key == self.players[pi]['controls'][2] and self.snakes[pi].speed != [SNAKE_SIZE, 0]:
+                            self.snakes[pi].speed = [-SNAKE_SIZE, 0]; self.players[pi]['can_move'] = False # left
+                        elif event.key == self.players[pi]['controls'][3] and self.snakes[pi].speed != [-SNAKE_SIZE, 0]:
+                            self.snakes[pi].speed = [SNAKE_SIZE, 0];  self.players[pi]['can_move'] = False # right
+                    else:
+                        self.players[pi]['move'] = event
 
 
 
@@ -301,177 +315,8 @@ class Snake:
             pygame.draw.rect(screen, SNAKE_COLOR, pygame.Rect(position[0]+BOARD_POSITION[0], position[1]+BOARD_POSITION[1], SNAKE_SIZE, SNAKE_SIZE))
     
     
+
 screen = pygame.display.set_mode((WIDTH+BOARD_POSITION[0], HEIGHT+BOARD_POSITION[1]))
-snake = Snake()
-
-
-def process_events(snake):
-    global can_move, move
-    move_keys = [pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT]
-    # possible cached move from last tick
-    if move:
-        if move.key == pygame.K_UP and snake.speed != [0, SNAKE_SIZE]:
-            snake.speed = [0, -SNAKE_SIZE]; can_move = False
-        elif move.key == pygame.K_DOWN and snake.speed != [0, -SNAKE_SIZE]:
-            snake.speed = [0, SNAKE_SIZE]; can_move = False
-        elif move.key == pygame.K_LEFT and snake.speed != [SNAKE_SIZE, 0]:
-            snake.speed = [-SNAKE_SIZE, 0]; can_move = False
-        elif move.key == pygame.K_RIGHT and snake.speed != [-SNAKE_SIZE, 0]:
-            snake.speed = [SNAKE_SIZE, 0]; can_move = False
-        move = None
-    
-    # other events
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
-        elif event.type == pygame.KEYDOWN:
-            if can_move:
-                if event.key == pygame.K_UP and snake.speed != [0, SNAKE_SIZE]:
-                    snake.speed = [0, -SNAKE_SIZE]; can_move = False
-                elif event.key == pygame.K_DOWN and snake.speed != [0, -SNAKE_SIZE]:
-                    snake.speed = [0, SNAKE_SIZE]; can_move = False
-                elif event.key == pygame.K_LEFT and snake.speed != [SNAKE_SIZE, 0]:
-                    snake.speed = [-SNAKE_SIZE, 0]; can_move = False
-                elif event.key == pygame.K_RIGHT and snake.speed != [-SNAKE_SIZE, 0]:
-                    snake.speed = [SNAKE_SIZE, 0]; can_move = False
-            else:
-                if event.key in move_keys:
-                    move = event
-
-def is_game_over(snake):
-    return snake.position[0] in snake.position[1:] or \
-        snake.position[0][0] not in range(0, WIDTH, SNAKE_SIZE) or \
-        snake.position[0][1] not in range(0, HEIGHT, SNAKE_SIZE)
-
-def start_screen(snake, score = None):
-    font = pygame.font.Font(None, 36)
-    text = font.render("Press any key to start", True, TEXT_COLOR)
-    text_rect = text.get_rect(center = (WIDTH / 2, HEIGHT / 2))
-    if score:
-        txt = font.render("Score: "+str(score), True, TEXT_COLOR)
-        txt_rect = txt.get_rect(center = (WIDTH / 2, HEIGHT / 2 - 40))
-
-    while True:
-        screen.fill(BACKGROUND_COLOR)
-        screen.blit(text, text_rect)
-        if score: screen.blit(txt, txt_rect)
-        pygame.display.flip()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    snake.position = [START_POSITION, [START_POSITION[0], START_POSITION[1] + 20], [START_POSITION[0], START_POSITION[1] + 40]]
-                    snake.speed = [0, -SNAKE_SIZE]
-                    print(snake.position)
-                    return
-                elif event.key == pygame.K_DOWN:
-                    snake.position = [START_POSITION, [START_POSITION[0], START_POSITION[1] - 20], [START_POSITION[0], START_POSITION[1] - 40]]
-                    snake.speed = [0, SNAKE_SIZE]
-                    return
-                elif event.key == pygame.K_LEFT:
-                    snake.position = [START_POSITION, [START_POSITION[0] + 20, START_POSITION[1]], [START_POSITION[0] + 40, START_POSITION[1]]]
-                    snake.speed = [-SNAKE_SIZE, 0]
-                    return
-                elif event.key == pygame.K_RIGHT:
-                    snake.position = [START_POSITION, [START_POSITION[0] - 20, START_POSITION[1]], [START_POSITION[0] - 40, START_POSITION[1]]]
-                    snake.speed = [SNAKE_SIZE, 0]
-                    return
-
-def get_new_food_location(snake):
-    global late_food_gen
-    global foods
-    if len(snake.position) + len(foods) >= WIDTH/20 * HEIGHT/20 / 2:
-        late_food_gen = True
-    location = []
-    if not late_food_gen:
-        location = [random.randrange(0, WIDTH, SNAKE_SIZE), random.randrange(0, HEIGHT, SNAKE_SIZE)]
-        for position in snake.position:
-            if position == location:
-                print("food can't be at", position)
-                location = get_new_food_location(snake)
-        for position in foods:
-            if position == location:
-                print("food can't be at", position)
-                location = get_new_food_location(snake)
-    else: 
-        foods.sort()
-        open_squares = []
-        for x in range(0, WIDTH, 20): 
-            for y in range(0, HEIGHT, 20):
-                good = True
-                for pos in snake.position:
-                    if pos[0] == x or pos[1] != y:
-                        good = False
-                for food in foods:
-                    if food[0] == x or food[1] != y:
-                        good = False
-                if good:
-                    print("good", [x, y])
-                    open_squares.append([x, y])
-        # print("open_squares", open_squares)
-        rand_num = random.randint(0, len(open_squares) - 1)
-        location = open_squares[rand_num]
-    
-    modifiers = []
-    if random.randint(0, 100) <= 50:
-        modifiers.append("speed")
-    location.append(modifiers)
-    return location
-
-                
-
-def update_foods(snake):
-    global score
-    global current_FPS
-    for food in foods:
-        if snake.position[0] == [food[0], food[1]]:
-            foods.remove(food)
-            score += 1
-            print("score: "+str(score))
-
-            if "speed" in food[2]:
-                current_FPS = FPS*2 # speed: 2x multiplier
-                set_timer('speed', 10) # 10 seconds
-
-            foods.append(get_new_food_location(snake))
-            # foods.append(get_new_food_location(snake))
-            # foods.append(get_new_food_location(snake))
-            # foods.append(get_new_food_location(snake))
-
-            snake.position.append(snake.last_position)
-
-def draw_foods():
-    for food in foods:
-        color = FOOD_COLOR
-        if "speed" in food[2]:
-            color = get_food_color("speed")
-        
-        pygame.draw.rect(screen, color, pygame.Rect(food[0]+BOARD_POSITION[0], food[1]+BOARD_POSITION[1], SNAKE_SIZE, SNAKE_SIZE))
-
-def get_food_color(mod):
-    for i in FOOD_COLORS:
-        if mod in i:
-            return i[1]
-
-def set_timer(name, seconds):
-    global timers
-    timers.append([name, time.time(), seconds])
-
-def update_timers():
-    global timers
-    global current_FPS
-    for timer in timers:
-        if "speed" in timer and timer[1] + timer[2] <= time.time():
-            timers.remove(timer)
-            current_FPS = FPS # end speed
-        else:
-            current_FPS = FPS*2
-
-
 #start_screen(snake)
 #foods = [get_new_food_location(snake)]
 BOARDS = []
